@@ -1,0 +1,22 @@
+{
+  "name": "leka-retail-api",
+  "version": "1.0.0",
+  "description": "Multi-tenant Express API for Leka Retail Billing Software",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon"
+  },
+  "dependencies": {
+    "@descope/node-sdk": "^2.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-async-handler": "^1.2.0",
+    "firebase-admin": "^13.8.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
