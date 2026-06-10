@@ -32,6 +32,7 @@ const invoiceRoutes  = require('./routes/invoice');
 const categoryRoutes = require('./routes/category');
 const uploadRoutes   = require('./routes/upload');
 const customerRoutes = require('./routes/customer');
+const expenseRoutes  = require('./routes/expense');
 
 app.use('/api/auth',       authRoutes);
 app.use('/api/businesses', businessRoutes);
@@ -40,6 +41,7 @@ app.use('/api/invoices',   invoiceRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/upload',     uploadRoutes);
 app.use('/api/customers',  customerRoutes);
+app.use('/api/expenses',   expenseRoutes);
 
 // Health Check API
 app.get('/health', (req, res) => {
