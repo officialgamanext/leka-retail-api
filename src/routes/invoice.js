@@ -128,6 +128,7 @@ router.post('/', asyncHandler(async (req, res) => {
     discount: discountVal,
     grandTotal: Number(grandTotal.toFixed(2)),
     paymentMethod: paymentMethod || 'Cash',
+    status: req.body.status || 'Settled', // 'Open' or 'Settled'
     createdAt: admin.firestore.FieldValue.serverTimestamp()
   };
 
@@ -150,6 +151,34 @@ router.post('/', asyncHandler(async (req, res) => {
       createdAt: new Date()
     }
   });
+}));
+
+// @desc    Settle an existing open invoice
+// @route   PUT /api/invoices/:id/settle
+// @access  Private
+router.put('/:id/settle', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { paymentMethod } = req.body;
+  const businessId = req.business.id;
+
+  const ref = db.collection('invoices').doc(id);
+  const doc = await ref.get();
+
+  if (!doc.exists || doc.data().businessId !== businessId) {
+    res.status(404);
+    throw new Error('Invoice not found or access denied');
+  }
+
+  const updates = {
+    status: 'Settled',
+    paymentMethod: paymentMethod || 'Cash',
+    settledAt: admin.firestore.FieldValue.serverTimestamp()
+  };
+
+  await ref.update(updates);
+  const updated = await ref.get();
+
+  res.json({ success: true, invoice: { id, ...updated.data() } });
 }));
 
 module.exports = router;
