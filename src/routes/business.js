@@ -13,17 +13,47 @@ router.use(protectDescope);
 router.get('/', asyncHandler(async (req, res) => {
   const userId = req.user.sub;
 
+  // Retrieve user document to get user phone number
+  const userDoc = await db.collection('users').doc(userId).get();
+  const userPhone = userDoc.exists ? userDoc.data().phone : null;
+
+  // Fetch owned businesses
   const snapshot = await db.collection('businesses')
     .where('ownerId', '==', userId)
     .get();
 
-  const businesses = [];
+  const ownedBusinesses = [];
   snapshot.forEach(doc => {
-    businesses.push({
+    ownedBusinesses.push({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      isStaff: false
     });
   });
+
+  // Fetch businesses where user is registered as staff
+  const staffBusinesses = [];
+  if (userPhone) {
+    const staffSnapshot = await db.collection('staff')
+      .where('phone', '==', userPhone)
+      .get();
+
+    for (const doc of staffSnapshot.docs) {
+      const staffData = doc.data();
+      const bizDoc = await db.collection('businesses').doc(staffData.businessId).get();
+      if (bizDoc.exists) {
+        staffBusinesses.push({
+          id: bizDoc.id,
+          ...bizDoc.data(),
+          isStaff: true,
+          staffName: staffData.name
+        });
+      }
+    }
+  }
+
+  // Combine both lists
+  const businesses = [...ownedBusinesses, ...staffBusinesses];
 
   // Sort in-memory to avoid Firestore composite index requirement
   businesses.sort((a, b) => {

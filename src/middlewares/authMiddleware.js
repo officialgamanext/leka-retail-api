@@ -60,11 +60,28 @@ const protectSubscription = asyncHandler(async (req, res, next) => {
     }
 
     const business = businessDoc.data();
+    let isStaff = false;
 
-    // 1. Strict Ownership Check
+    // 1. Ownership Check or Staff Check
     if (business.ownerId !== userId) {
-      res.status(403);
-      throw new Error('Access Denied: You do not own this business');
+      // Retrieve staff record by user phone number
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userPhone = userDoc.exists ? userDoc.data().phone : null;
+
+      if (userPhone) {
+        const staffSnap = await db.collection('staff')
+          .where('businessId', '==', businessId)
+          .where('phone', '==', userPhone)
+          .get();
+        if (!staffSnap.empty) {
+          isStaff = true;
+        }
+      }
+
+      if (!isStaff) {
+        res.status(403);
+        throw new Error('Access Denied: You do not own or work at this business');
+      }
     }
 
     // 2. Strict Active Check
@@ -88,7 +105,8 @@ const protectSubscription = asyncHandler(async (req, res, next) => {
     // Attach business object to request for downstream handlers
     req.business = {
       id: businessDoc.id,
-      ...business
+      ...business,
+      isStaff
     };
 
     next();
