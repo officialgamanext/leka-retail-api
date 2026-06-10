@@ -15,7 +15,6 @@ router.get('/', asyncHandler(async (req, res) => {
 
   const snapshot = await db.collection('businesses')
     .where('ownerId', '==', userId)
-    .orderBy('createdAt', 'desc')
     .get();
 
   const businesses = [];
@@ -24,6 +23,13 @@ router.get('/', asyncHandler(async (req, res) => {
       id: doc.id,
       ...doc.data()
     });
+  });
+
+  // Sort in-memory to avoid Firestore composite index requirement
+  businesses.sort((a, b) => {
+    const timeA = a.createdAt ? (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime()) : 0;
+    const timeB = b.createdAt ? (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime()) : 0;
+    return timeB - timeA; // Descending order
   });
 
   res.status(200).json({
@@ -44,12 +50,15 @@ router.post('/', asyncHandler(async (req, res) => {
     throw new Error('Please provide business name and address');
   }
 
+  const expiryDate = new Date();
+  expiryDate.setDate(expiryDate.getDate() - 2); // 2 days before creation date
+
   const newBusiness = {
     name,
     address,
     ownerId: userId,
     isActive: false,              // Inactive initially
-    subscriptionEndDate: null,     // Null initially
+    subscriptionEndDate: admin.firestore.Timestamp.fromDate(expiryDate), // Expired 2 days ago
     createdAt: admin.firestore.FieldValue.serverTimestamp()
   };
 

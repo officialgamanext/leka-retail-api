@@ -1,138 +1,131 @@
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const { db, admin } = require('../config/firebase');
-const asyncHandler = require('express-async-handler');
+const asyncHandler  = require('express-async-handler');
 const { protectDescope, protectSubscription } = require('../middlewares/authMiddleware');
 
 // All product routes require valid login AND active business subscription
 router.use(protectDescope);
 router.use(protectSubscription);
 
-// @desc    Get all products for current business
-// @route   GET /api/products
-// @access  Private
+// GET /api/products — list all products for current business
 router.get('/', asyncHandler(async (req, res) => {
   const businessId = req.business.id;
-
-  const snapshot = await db.collection('products')
-    .where('businessId', '==', businessId)
-    .orderBy('name', 'asc')
-    .get();
+  const snap = await db.collection('products').where('businessId', '==', businessId).get();
 
   const products = [];
-  snapshot.forEach(doc => {
-    products.push({
-      id: doc.id,
-      ...doc.data()
-    });
-  });
+  snap.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
 
-  res.status(200).json({
-    success: true,
-    products
-  });
+  // Sort alphabetically in-memory (no composite index needed)
+  products.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  res.json({ success: true, products });
 }));
 
-// @desc    Add a product to current business inventory
-// @route   POST /api/products
-// @access  Private
+// POST /api/products — create a new product item
 router.post('/', asyncHandler(async (req, res) => {
-  const { name, sku, price, gstRate, stock } = req.body;
+  const {
+    name, shortCode, price, gstRate, stock, bufferStock,
+    categoryId, categoryName,
+    barcode,          // unique barcode string
+    imageUrl,         // ImageKit CDN URL
+    barcodeImageUrl   // ImageKit CDN URL for barcode image
+  } = req.body;
+
   const businessId = req.business.id;
 
-  if (!name || price === undefined || gstRate === undefined || stock === undefined) {
+  if (!name || price === undefined) {
     res.status(400);
-    throw new Error('Please fill in all required fields (name, price, gstRate, stock)');
+    throw new Error('Product name and price are required');
+  }
+
+  // Prevent duplicate barcode within the same business
+  if (barcode) {
+    const dupSnap = await db.collection('products')
+      .where('businessId', '==', businessId)
+      .where('barcode', '==', barcode)
+      .get();
+    if (!dupSnap.empty) {
+      res.status(409);
+      throw new Error('A product with this barcode already exists in this business');
+    }
   }
 
   const newProduct = {
-    name,
-    sku: sku || '',
-    price: Number(price),
-    gstRate: Number(gstRate),
-    stock: Number(stock),
     businessId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
+    name:            name.trim(),
+    shortCode:       (shortCode || '').toUpperCase().trim(),
+    price:           Number(price),
+    gstRate:         Number(gstRate || 0),
+    stock:           Number(stock || 0),
+    bufferStock:     Number(bufferStock || 0),
+    categoryId:      categoryId  || '',
+    categoryName:    categoryName || 'Uncategorised',
+    barcode:         barcode       || '',
+    imageUrl:        imageUrl      || '',
+    barcodeImageUrl: barcodeImageUrl || '',
+    createdAt:       admin.firestore.FieldValue.serverTimestamp()
   };
 
   const docRef = await db.collection('products').add(newProduct);
-  const savedDoc = await docRef.get();
+  const saved  = await docRef.get();
 
   res.status(201).json({
     success: true,
-    product: {
-      id: docRef.id,
-      ...savedDoc.data()
-    }
+    product: { id: docRef.id, ...saved.data(), createdAt: new Date() }
   });
 }));
 
-// @desc    Update a product in inventory
-// @route   PUT /api/products/:id
-// @access  Private
+// PUT /api/products/:id — update an existing product
 router.put('/:id', asyncHandler(async (req, res) => {
-  const productId = req.params.id;
+  const { id } = req.params;
   const businessId = req.business.id;
-  const { name, sku, price, gstRate, stock } = req.body;
 
-  const productDocRef = db.collection('products').doc(productId);
-  const productDoc = await productDocRef.get();
+  const ref = db.collection('products').doc(id);
+  const doc = await ref.get();
 
-  if (!productDoc.exists) {
+  if (!doc.exists || doc.data().businessId !== businessId) {
     res.status(404);
-    throw new Error('Product not found');
+    throw new Error('Product not found or access denied');
   }
 
-  if (productDoc.data().businessId !== businessId) {
-    res.status(403);
-    throw new Error('Access Denied: Product does not belong to this business');
-  }
+  const {
+    name, shortCode, price, gstRate, stock, bufferStock,
+    categoryId, categoryName, imageUrl
+  } = req.body;
 
   const updates = {};
-  if (name !== undefined) updates.name = name;
-  if (sku !== undefined) updates.sku = sku;
-  if (price !== undefined) updates.price = Number(price);
-  if (gstRate !== undefined) updates.gstRate = Number(gstRate);
-  if (stock !== undefined) updates.stock = Number(stock);
+  if (name       !== undefined) updates.name         = name.trim();
+  if (shortCode  !== undefined) updates.shortCode    = shortCode.toUpperCase().trim();
+  if (price      !== undefined) updates.price        = Number(price);
+  if (gstRate    !== undefined) updates.gstRate      = Number(gstRate);
+  if (stock      !== undefined) updates.stock        = Number(stock);
+  if (bufferStock!== undefined) updates.bufferStock  = Number(bufferStock);
+  if (categoryId !== undefined) updates.categoryId   = categoryId;
+  if (categoryName!== undefined)updates.categoryName = categoryName;
+  if (imageUrl   !== undefined) updates.imageUrl     = imageUrl;
 
-  await productDocRef.update(updates);
-  const updatedDoc = await productDocRef.get();
+  await ref.update(updates);
+  const updated = await ref.get();
 
-  res.status(200).json({
-    success: true,
-    product: {
-      id: productId,
-      ...updatedDoc.data()
-    }
-  });
+  res.json({ success: true, product: { id, ...updated.data() } });
 }));
 
-// @desc    Delete a product from inventory
-// @route   DELETE /api/products/:id
-// @access  Private
+// DELETE /api/products/:id
 router.delete('/:id', asyncHandler(async (req, res) => {
-  const productId = req.params.id;
+  const { id } = req.params;
   const businessId = req.business.id;
 
-  const productDocRef = db.collection('products').doc(productId);
-  const productDoc = await productDocRef.get();
+  const ref = db.collection('products').doc(id);
+  const doc = await ref.get();
 
-  if (!productDoc.exists) {
+  if (!doc.exists || doc.data().businessId !== businessId) {
     res.status(404);
-    throw new Error('Product not found');
+    throw new Error('Product not found or access denied');
   }
 
-  if (productDoc.data().businessId !== businessId) {
-    res.status(403);
-    throw new Error('Access Denied: Product does not belong to this business');
-  }
-
-  await productDocRef.delete();
-
-  res.status(200).json({
-    success: true,
-    message: 'Product deleted successfully'
-  });
+  await ref.delete();
+  res.json({ success: true, message: 'Product deleted successfully' });
 }));
 
 module.exports = router;

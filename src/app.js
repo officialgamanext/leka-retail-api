@@ -21,19 +21,23 @@ app.use(cors({
 
 // Middlewares
 app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routing
-const authRoutes = require('./routes/auth');
+const authRoutes     = require('./routes/auth');
 const businessRoutes = require('./routes/business');
-const productRoutes = require('./routes/product');
-const invoiceRoutes = require('./routes/invoice');
+const productRoutes  = require('./routes/product');
+const invoiceRoutes  = require('./routes/invoice');
+const categoryRoutes = require('./routes/category');
+const uploadRoutes   = require('./routes/upload');
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth',       authRoutes);
 app.use('/api/businesses', businessRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/invoices', invoiceRoutes);
+app.use('/api/products',   productRoutes);
+app.use('/api/invoices',   invoiceRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/upload',     uploadRoutes);
 
 // Health Check API
 app.get('/health', (req, res) => {

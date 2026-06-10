@@ -16,7 +16,6 @@ router.get('/', asyncHandler(async (req, res) => {
 
   const snapshot = await db.collection('invoices')
     .where('businessId', '==', businessId)
-    .orderBy('createdAt', 'desc')
     .get();
 
   const invoices = [];
@@ -25,6 +24,13 @@ router.get('/', asyncHandler(async (req, res) => {
       id: doc.id,
       ...doc.data()
     });
+  });
+
+  // Sort in-memory to avoid Firestore composite index requirement
+  invoices.sort((a, b) => {
+    const timeA = a.createdAt ? (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime()) : 0;
+    const timeB = b.createdAt ? (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime()) : 0;
+    return timeB - timeA; // Descending order
   });
 
   res.status(200).json({
