@@ -43,13 +43,16 @@ router.get('/', asyncHandler(async (req, res) => {
 // @route   POST /api/invoices
 // @access  Private
 router.post('/', asyncHandler(async (req, res) => {
-  const { customerName, customerPhone, items, discount, paymentMethod } = req.body;
+  const { customerName, customerPhone, items, discount, paymentMethod, status } = req.body;
   const businessId = req.business.id;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     res.status(400);
     throw new Error('Please select at least one product to check out');
   }
+
+  const finalStatus = status || 'Settled';
+  const isSettled = finalStatus === 'Settled';
 
   // 1. Validate items and compute totals securely using DB data
   let subtotal = 0;
@@ -75,8 +78,8 @@ router.post('/', asyncHandler(async (req, res) => {
       throw new Error(`Access Denied: Product ${product.name} is not in this business catalog`);
     }
 
-    // Check if sufficient stock is available
-    if (product.stock < item.quantity) {
+    // Check stock if we are settling immediately
+    if (isSettled && product.stock < item.quantity) {
       res.status(400);
       throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
     }
@@ -102,11 +105,13 @@ router.post('/', asyncHandler(async (req, res) => {
     subtotal += itemSubtotal;
     taxAmount += itemGstAmount;
 
-    // Deduct stock reference in batch
-    const productRef = db.collection('products').doc(item.productId);
-    batch.update(productRef, {
-      stock: admin.firestore.FieldValue.increment(-quantity)
-    });
+    if (isSettled) {
+      // Deduct stock reference in batch
+      const productRef = db.collection('products').doc(item.productId);
+      batch.update(productRef, {
+        stock: admin.firestore.FieldValue.increment(-quantity)
+      });
+    }
   }
 
   const discountVal = Number(discount || 0);
@@ -128,7 +133,7 @@ router.post('/', asyncHandler(async (req, res) => {
     discount: discountVal,
     grandTotal: Number(grandTotal.toFixed(2)),
     paymentMethod: paymentMethod || 'Cash',
-    status: req.body.status || 'Settled', // 'Open' or 'Settled'
+    status: finalStatus, // 'Open' or 'Settled'
     createdAt: admin.firestore.FieldValue.serverTimestamp()
   };
 
@@ -136,7 +141,7 @@ router.post('/', asyncHandler(async (req, res) => {
   const invoiceDocRef = db.collection('invoices').doc();
   batch.set(invoiceDocRef, newInvoice);
 
-  // Execute batch write (deduct stock and save invoice atomically)
+  // Execute batch write (deduct stock if settled and save invoice atomically)
   await batch.commit();
 
   // Retrieve saved invoice for response
@@ -169,13 +174,54 @@ router.put('/:id/settle', asyncHandler(async (req, res) => {
     throw new Error('Invoice not found or access denied');
   }
 
+  const invoice = doc.data();
+  if (invoice.status === 'Settled') {
+    res.status(400);
+    throw new Error('This invoice is already settled');
+  }
+
+  const items = invoice.items || [];
+  const batch = db.batch();
+
+  for (const item of items) {
+    if (!item.productId || !item.quantity || item.quantity <= 0) {
+      res.status(400);
+      throw new Error('Invalid item structure in invoice');
+    }
+
+    const productDoc = await db.collection('products').doc(item.productId).get();
+    if (!productDoc.exists) {
+      res.status(404);
+      throw new Error(`Product ${item.name || item.productId} not found in inventory`);
+    }
+
+    const product = productDoc.data();
+    if (product.businessId !== businessId) {
+      res.status(403);
+      throw new Error(`Access Denied: Product ${product.name} is not in this business catalog`);
+    }
+
+    // Check if sufficient stock is available
+    if (product.stock < item.quantity) {
+      res.status(400);
+      throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
+    }
+
+    const productRef = db.collection('products').doc(item.productId);
+    batch.update(productRef, {
+      stock: admin.firestore.FieldValue.increment(-Number(item.quantity))
+    });
+  }
+
   const updates = {
     status: 'Settled',
     paymentMethod: paymentMethod || 'Cash',
     settledAt: admin.firestore.FieldValue.serverTimestamp()
   };
 
-  await ref.update(updates);
+  batch.update(ref, updates);
+  await batch.commit();
+
   const updated = await ref.get();
 
   res.json({ success: true, invoice: { id, ...updated.data() } });
