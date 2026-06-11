@@ -182,4 +182,48 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   });
 }));
 
+// @desc    Update business details (name, address, gstEnabled, gstPercentage)
+// @route   PUT /api/businesses/:id
+// @access  Private
+router.put('/:id', asyncHandler(async (req, res) => {
+  const businessId = req.params.id;
+  const userId = req.user.sub;
+
+  const businessDocRef = db.collection('businesses').doc(businessId);
+  const businessDoc = await businessDocRef.get();
+
+  if (!businessDoc.exists) {
+    res.status(404);
+    throw new Error('Business not found');
+  }
+
+  const business = businessDoc.data();
+
+  // Verify ownership
+  if (business.ownerId !== userId) {
+    res.status(403);
+    throw new Error('Access Denied: You do not own this business');
+  }
+
+  const { name, address, gstEnabled, gstPercentage } = req.body;
+
+  const updates = {};
+  if (name !== undefined) updates.name = name.trim();
+  if (address !== undefined) updates.address = address.trim();
+  if (gstEnabled !== undefined) updates.gstEnabled = !!gstEnabled;
+  if (gstPercentage !== undefined) updates.gstPercentage = Number(gstPercentage);
+
+  await businessDocRef.update(updates);
+  const updatedDoc = await businessDocRef.get();
+
+  res.status(200).json({
+    success: true,
+    message: 'Business details updated successfully',
+    business: {
+      id: businessId,
+      ...updatedDoc.data()
+    }
+  });
+}));
+
 module.exports = router;

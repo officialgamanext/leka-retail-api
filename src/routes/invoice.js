@@ -86,7 +86,7 @@ router.post('/', asyncHandler(async (req, res) => {
 
     const price = Number(product.price);
     const quantity = Number(item.quantity);
-    const gstRate = Number(product.gstRate || 0);
+    const gstRate = req.business.gstEnabled ? Number(req.business.gstPercentage || 0) : 0;
 
     const itemSubtotal = price * quantity;
     const itemGstAmount = (itemSubtotal * gstRate) / 100;
