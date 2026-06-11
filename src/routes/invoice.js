@@ -134,7 +134,7 @@ router.post('/', asyncHandler(async (req, res) => {
     grandTotal: Number(grandTotal.toFixed(2)),
     paymentMethod: paymentMethod || 'Cash',
     status: finalStatus, // 'Open' or 'Settled'
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
+    createdAt: req.body.createdAt ? admin.firestore.Timestamp.fromDate(new Date(req.body.createdAt)) : admin.firestore.FieldValue.serverTimestamp()
   };
 
   // Add invoice to batch
