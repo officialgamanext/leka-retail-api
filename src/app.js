@@ -35,6 +35,7 @@ const customerRoutes = require('./routes/customer');
 const expenseRoutes  = require('./routes/expense');
 const staffRoutes    = require('./routes/staff');
 const vendorRoutes   = require('./routes/vendor');
+const adminRoutes    = require('./routes/admin');
 
 app.use('/api/auth',       authRoutes);
 app.use('/api/businesses', businessRoutes);
@@ -46,6 +47,7 @@ app.use('/api/customers',  customerRoutes);
 app.use('/api/expenses',   expenseRoutes);
 app.use('/api/staff',      staffRoutes);
 app.use('/api/vendors',    vendorRoutes);
+app.use('/api/admin',      adminRoutes);
 
 // Health Check API
 app.get('/health', (req, res) => {
