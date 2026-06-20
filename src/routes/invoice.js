@@ -79,7 +79,7 @@ router.post('/', asyncHandler(async (req, res) => {
     }
 
     // Check stock if we are settling immediately
-    if (isSettled && product.stock < item.quantity) {
+    if (isSettled && product.stock < item.quantity && !req.business.enableOutOfStockBilling) {
       res.status(400);
       throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
     }
@@ -202,7 +202,7 @@ router.put('/:id/settle', asyncHandler(async (req, res) => {
     }
 
     // Check if sufficient stock is available
-    if (product.stock < item.quantity) {
+    if (product.stock < item.quantity && !req.business.enableOutOfStockBilling) {
       res.status(400);
       throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
     }

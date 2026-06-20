@@ -89,6 +89,7 @@ router.post('/', asyncHandler(async (req, res) => {
     ownerId: userId,
     isActive: false,              // Inactive initially
     subscriptionEndDate: admin.firestore.Timestamp.fromDate(expiryDate), // Expired 2 days ago
+    enableOutOfStockBilling: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp()
   };
 
@@ -205,13 +206,14 @@ router.put('/:id', asyncHandler(async (req, res) => {
     throw new Error('Access Denied: You do not own this business');
   }
 
-  const { name, address, gstEnabled, gstPercentage } = req.body;
+  const { name, address, gstEnabled, gstPercentage, enableOutOfStockBilling } = req.body;
 
   const updates = {};
   if (name !== undefined) updates.name = name.trim();
   if (address !== undefined) updates.address = address.trim();
   if (gstEnabled !== undefined) updates.gstEnabled = !!gstEnabled;
   if (gstPercentage !== undefined) updates.gstPercentage = Number(gstPercentage);
+  if (enableOutOfStockBilling !== undefined) updates.enableOutOfStockBilling = !!enableOutOfStockBilling;
 
   await businessDocRef.update(updates);
   const updatedDoc = await businessDocRef.get();
