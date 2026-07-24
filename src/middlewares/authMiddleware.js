@@ -25,12 +25,12 @@ const protectDescope = asyncHandler(async (req, res, next) => {
     req.user = authInfo.token;
     next();
   } catch (error) {
-    console.error('Descope Auth Error:', error.message);
     res.status(401);
-    
     if (error.message?.includes('JWTExpired')) {
+      console.warn('Descope Auth: Session token has expired.');
       throw new Error('Your session has expired. Please log in again.');
     }
+    console.error('Descope Auth Error:', error.message);
     throw new Error('Not authorized, Descope session failed');
   }
 });

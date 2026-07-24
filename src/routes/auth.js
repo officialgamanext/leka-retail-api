@@ -199,8 +199,12 @@ router.post('/refresh', asyncHandler(async (req, res) => {
       refreshToken: refreshJwt || refreshToken
     });
   } catch (error) {
-    console.error('Session Refresh Error:', error);
     res.status(401);
+    if (error.message?.includes('JWTExpired')) {
+      console.warn('Session Refresh: Refresh token has expired.');
+    } else {
+      console.error('Session Refresh Error:', error.message || error);
+    }
     throw new Error(error.message || 'Failed to refresh session');
   }
 }));
