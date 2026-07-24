@@ -227,4 +227,24 @@ router.put('/:id/settle', asyncHandler(async (req, res) => {
   res.json({ success: true, invoice: { id, ...updated.data() } });
 }));
 
+// @desc    Delete an open invoice
+// @route   DELETE /api/invoices/:id
+// @access  Private
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const businessId = req.business.id;
+
+  const ref = db.collection('invoices').doc(id);
+  const doc = await ref.get();
+
+  if (!doc.exists || doc.data().businessId !== businessId) {
+    res.status(404);
+    throw new Error('Invoice not found or access denied');
+  }
+
+  await ref.delete();
+
+  res.json({ success: true, message: 'Invoice deleted successfully' });
+}));
+
 module.exports = router;
